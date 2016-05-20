@@ -36,11 +36,10 @@ sbox = [
     [0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16]]
 
 def subBytes(state):
-    for row in range(4):
-        for col in range(4):
-            ncol = state[row][col] % 16
-            nrow = state[row][col] // 16
-            state[row][col] = sbox[nrow][ncol]
+    for element in state:
+        ncol = element % 16
+        nrow = element // 16
+        element = sbox[nrow, ncol]
 
 def shiftRows(state):
     state[1] = np.array([state[1][1], state[1][2], state[1][3], state[1][0]]).tolist()
@@ -63,28 +62,23 @@ def mixColumns(state):
 def addRoundKey(state, roundKey):
     for row in range(4):
         for col in range(4):
-            state[row][col] = state[row][col] ^ int(roundKey[row][col])
+            state[row][col] = state[row][col] ^ roundKey[row][col]
 
 rcon = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
 
-def column(matrix, i):
-    return [row[i] for row in matrix]
-
-def keyExpansion(key, rounds):
+def keyExpansion(key):
     expanded = deepcopy(key)
-
-    for i in range(4, rounds * 4):
-        expanded = [row + [0] for row in expanded] #add a 0 right column
-        temp = column(expanded, i - 1)
-        temp1 = column(expanded, i - 4)
+    for i in range(4, 44):
+        temp = [col[i - 1] for col in expanded]
         if i % 4 == 0:
             rotWord(temp)
             subWord(temp)
-            currentRound = i // 4
-            temp[0] = temp[0] ^ rcon[currentRound - 1]
+            r = (i // 4)
+            temp[0] = temp[0] ^ rcon[r - 1]
 
+        v = np.asmatrix(temp) ^ np.asmatrix([col[i - 4] for col in expanded])
         for row in range(4):
-            expanded[row][i] = temp[row] ^ temp1[row]
+            expanded[row].append(v[row])
 
     return expanded
 
@@ -93,7 +87,7 @@ def rotWord(word):
     for i in range(3):
         _word[i] = word[i + 1]
     _word[3] = word[0]
-    #copy lists and modify the reference
+    #copy lists
     for i in range(4):
         word[i] = _word[i]
 
@@ -105,9 +99,8 @@ def subWord(word):
 
 def getRoundkey(expanded, _round):
     roundkey = np.zeros((4, 4), dtype=np.int)
-    _expanded = np.asmatrix(expanded)
     for i in range (4):
-        roundkey[:, i] = _expanded[:, 4 * (_round - 1) + i].reshape(4,)
+        roundkey[:, i] = expanded[:, 4 * (_round - 1) + i].reshape(4,)
 
     return roundkey.tolist()
 
@@ -123,16 +116,14 @@ key = np.matrix(((0x0f, 0x47, 0x0c, 0xaf),
 
 def encryptBlock(block, key):
     state = deepcopy(block)
-    expandedKey = keyExpansion(key, 11)
+    expandedKey = keyExpansion(key)
 
-    roundkey = getRoundkey(expandedKey, 1)
+    roundkey = np.zeros((4, 4))
+    getRoundkey(expandedKey, 1, roundkey)
     addRoundKey(state, roundkey)
 
-    for _round in range(2, 12):
-        subBytes(state)
-        shiftRows(state)
-        mixColumns(state)
-        roundkey = getRoundkey(expandedKey, _round)
-        addRoundKey(state, roundkey)
-
+#    for _round in range(10):
+#        subBytes(state)
+#        shiftRows(state)
+#        mixColumns(state)
     return state   
