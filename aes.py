@@ -1,16 +1,16 @@
 """ General Functions """
 
-def mul2(number):
-    n = number << 1
-    if n & (1 << 8):
-        n = n ^ 0b100011011
-    return n
-
-def mul3(number):
-    n = mul2(number)
-    n = n ^ number
-    return n
-
+def mul(a, b):
+    p = 0
+    while b:
+        if b & 1:
+            p = p ^ a
+        if a & 0x80:
+            a = (a << 1) ^ 0b100011011
+        else:
+            a <<= 1
+        b >>= 1
+    return p
 
 """ AES Functions """
 import numpy as np
@@ -35,30 +35,67 @@ sbox = [
     [0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf],
     [0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16]]
 
-def subBytes(state):
+invSbox = [
+    [0x52,0x09,0x6A,0xD5,0x30,0x36,0xA5,0x38,0xBF,0x40,0xA3,0x9E,0x81,0xF3,0xD7,0xFB],
+    [0x7C,0xE3,0x39,0x82,0x9B,0x2F,0xFF,0x87,0x34,0x8E,0x43,0x44,0xC4,0xDE,0xE9,0xCB],
+    [0x54,0x7B,0x94,0x32,0xA6,0xC2,0x23,0x3D,0xEE,0x4C,0x95,0x0B,0x42,0xFA,0xC3,0x4E],
+    [0x08,0x2E,0xA1,0x66,0x28,0xD9,0x24,0xB2,0x76,0x5B,0xA2,0x49,0x6D,0x8B,0xD1,0x25],
+    [0x72,0xF8,0xF6,0x64,0x86,0x68,0x98,0x16,0xD4,0xA4,0x5C,0xCC,0x5D,0x65,0xB6,0x92],
+    [0x6C,0x70,0x48,0x50,0xFD,0xED,0xB9,0xDA,0x5E,0x15,0x46,0x57,0xA7,0x8D,0x9D,0x84],
+    [0x90,0xD8,0xAB,0x00,0x8C,0xBC,0xD3,0x0A,0xF7,0xE4,0x58,0x05,0xB8,0xB3,0x45,0x06],
+    [0xD0,0x2C,0x1E,0x8F,0xCA,0x3F,0x0F,0x02,0xC1,0xAF,0xBD,0x03,0x01,0x13,0x8A,0x6B],
+    [0x3A,0x91,0x11,0x41,0x4F,0x67,0xDC,0xEA,0x97,0xF2,0xCF,0xCE,0xF0,0xB4,0xE6,0x73],
+    [0x96,0xAC,0x74,0x22,0xE7,0xAD,0x35,0x85,0xE2,0xF9,0x37,0xE8,0x1C,0x75,0xDF,0x6E],
+    [0x47,0xF1,0x1A,0x71,0x1D,0x29,0xC5,0x89,0x6F,0xB7,0x62,0x0E,0xAA,0x18,0xBE,0x1B],
+    [0xFC,0x56,0x3E,0x4B,0xC6,0xD2,0x79,0x20,0x9A,0xDB,0xC0,0xFE,0x78,0xCD,0x5A,0xF4],
+    [0x1F,0xDD,0xA8,0x33,0x88,0x07,0xC7,0x31,0xB1,0x12,0x10,0x59,0x27,0x80,0xEC,0x5F],
+    [0x60,0x51,0x7F,0xA9,0x19,0xB5,0x4A,0x0D,0x2D,0xE5,0x7A,0x9F,0x93,0xC9,0x9C,0xEF],
+    [0xA0,0xE0,0x3B,0x4D,0xAE,0x2A,0xF5,0xB0,0xC8,0xEB,0xBB,0x3C,0x83,0x53,0x99,0x61],
+    [0x17,0x2B,0x04,0x7E,0xBA,0x77,0xD6,0x26,0xE1,0x69,0x14,0x63,0x55,0x21,0x0C,0x7D]]
+
+def subBytes(state, op):
     for row in range(4):
         for col in range(4):
             ncol = state[row][col] % 16
             nrow = state[row][col] // 16
-            state[row][col] = sbox[nrow][ncol]
+            if op == "encrypt":
+                state[row][col] = sbox[nrow][ncol]
+            else:
+                state[row][col] = invSbox[nrow][ncol]
 
 def shiftRows(state):
     state[1] = np.array([state[1][1], state[1][2], state[1][3], state[1][0]]).tolist()
     state[2] = np.array([state[2][2], state[2][3], state[2][0], state[2][1]]).tolist()
     state[3] = np.array([state[3][3], state[3][0], state[3][1], state[3][2]]).tolist()
 
+def invShiftRows(state):
+    state[1] = np.array([state[1][3], state[1][0], state[1][1], state[1][2]]).tolist()
+    state[2] = np.array([state[2][2], state[2][3], state[2][0], state[2][1]]).tolist()
+    state[3] = np.array([state[3][1], state[3][2], state[3][3], state[3][0]]).tolist()
+
 def mixColumns(state):
     _state = np.zeros((4, 4), dtype=np.int)
     for col in range(4):
-        _state[0, col] = mul2(state[0][col]) ^ mul3(state[1][col]) ^ state[2][col] ^ state[3][col]
-        _state[1, col] = state[0][col] ^ mul2(state[1][col]) ^ mul3(state[2][col]) ^ state[3][col]
-        _state[2, col] = state[0][col] ^ state[1][col] ^ mul2(state[2][col]) ^ mul3(state[3][col])
-        _state[3, col] = mul3(state[0][col]) ^ state[1][col] ^ state[2][col] ^ mul2(state[3][col])
+        _state[0, col] = mul(state[0][col], 2) ^ mul(state[1][col], 3) ^ state[2][col] ^ state[3][col]
+        _state[1, col] = state[0][col] ^ mul(state[1][col], 2) ^ mul(state[2][col], 3) ^ state[3][col]
+        _state[2, col] = state[0][col] ^ state[1][col] ^ mul(state[2][col], 2) ^ mul(state[3][col], 3)
+        _state[3, col] = mul(state[0][col], 3) ^ state[1][col] ^ state[2][col] ^ mul(state[3][col], 2)
 
     for row in range(4):
         for col in range(4):
             state[row][col] = _state[row, col]
 
+def invMixColumns(state):
+    _state = np.zeros((4, 4), dtype=np.int)
+    for col in range(4):
+        _state[0, col] = mul(state[0][col], 14) ^ mul(state[1][col], 11) ^ mul(state[2][col], 13) ^ mul(state[3][col], 9)
+        _state[1, col] = mul(state[0][col], 9) ^ mul(state[1][col], 14) ^ mul(state[2][col], 11) ^ mul(state[3][col], 13)
+        _state[2, col] = mul(state[0][col], 13) ^ mul(state[1][col], 9) ^ mul(state[2][col], 14) ^ mul(state[3][col], 11)
+        _state[3, col] = mul(state[0][col], 11) ^ mul(state[1][col], 13) ^ mul(state[2][col], 9) ^ mul(state[3][col], 14)
+
+    for row in range(4):
+        for col in range(4):
+            state[row][col] = _state[row, col]
 
 def addRoundKey(state, roundKey):
     for row in range(4):
@@ -116,10 +153,10 @@ block = np.matrix([[0x01, 0x89, 0xfe, 0x76],
                    [0x45, 0xcd, 0xba, 0x32],
                    [0x67, 0xef, 0x98, 0x10]])
 
-key = np.matrix(((0x0f, 0x47, 0x0c, 0xaf),
-                 (0x15, 0xd9, 0xb7, 0x7f),
-                 (0x71, 0xe8, 0xad, 0x67),
-                 (0xc9, 0x59, 0xd6, 0x98)))
+key = np.matrix([[0x0f, 0x47, 0x0c, 0xaf],
+                 [0x15, 0xd9, 0xb7, 0x7f],
+                 [0x71, 0xe8, 0xad, 0x67],
+                 [0xc9, 0x59, 0xd6, 0x98]])
 
 def encryptBlock(block, key):
     state = deepcopy(block)
@@ -127,12 +164,35 @@ def encryptBlock(block, key):
 
     roundkey = getRoundkey(expandedKey, 1)
     addRoundKey(state, roundkey)
+    #print "round11:\n{}".format(np.asmatrix(state))
 
     for _round in range(2, 12):
-        subBytes(state)
+        subBytes(state, "encrypt")
         shiftRows(state)
-        mixColumns(state)
+        if _round != 11:
+            mixColumns(state)
         roundkey = getRoundkey(expandedKey, _round)
         addRoundKey(state, roundkey)
+        #print "round{}:\n{}".format(_round, np.asmatrix(state))
+
+    return state   
+
+def decryptBlock(block, key):
+    state = deepcopy(block)
+    expandedKey = keyExpansion(key, 11)
+
+    roundkey = getRoundkey(expandedKey, 11)
+    #print "roundkey:\n{}".format(np.asmatrix(roundkey))
+    addRoundKey(state, roundkey)
+    #print "round11:\n{}".format(np.asmatrix(state))
+
+    for _round in reversed(range(1, 11)):
+        invShiftRows(state)
+        subBytes(state, "decrypt")
+        roundkey = getRoundkey(expandedKey, _round)
+        addRoundKey(state, roundkey)
+        if _round != 1:
+            invMixColumns(state)
+        #print "round{}:\n{}".format(_round, np.asmatrix(state))
 
     return state   
